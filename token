@@ -1,0 +1,73 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol";
+import "@openzeppelin/contracts/utils/math/SafeMath.sol";
+
+contract Token is ERC20, Ownable, ERC20Burnable {
+    using SafeMath for uint256;
+
+    event LogMessage(string message);
+
+    struct Voucher {
+        uint256 voucherValue;
+        uint256 voucherQuantity;
+    }
+
+    mapping(string => Voucher) public vouchers;
+
+    constructor() ERC20("Degen", "DGN") Ownable(msg.sender) {
+        
+        initializeVoucher("10PercentOff", 1, 50);
+        initializeVoucher("20PercentOff", 2, 30);
+        initializeVoucher("30PercentOff", 3, 20);
+        initializeVoucher("50PercentOff", 4, 10);
+    }
+
+    function initializeVoucher(string memory voucherType, uint256 value, uint256 itemSum) internal {
+        if (vouchers[voucherType].voucherValue == 0) {
+            vouchers[voucherType] = Voucher(value, itemSum);
+        }
+    }
+
+    function mintTokens(address account, uint256 weight) public onlyOwner {
+        _mint(account, weight);
+    }
+
+    function burnTokens(uint256 weight) public onlyOwner {
+        require(balanceOf(msg.sender) >= weight, "Insufficient funds for burning tokens");
+        _burn(msg.sender, weight);
+        emit LogMessage("Tokens burned successfully");
+    }
+
+    function transferTokens(address recipient, uint256 weight) external {
+        require(balanceOf(msg.sender) >= weight, "Insufficient funds for transferring tokens");
+        _transfer(msg.sender, recipient, weight);
+    }
+
+    function redeemVoucher(string memory voucherType, uint256 itemSum) external {
+        require(bytes(voucherType).length > 0, "Voucher type cannot be empty");
+        require(itemSum > 0, "Item sum must be greater than zero");
+
+        Voucher storage voucher = vouchers[voucherType];
+
+        require(voucher.voucherValue > 0, "Invalid voucher type");
+        require(voucher.voucherQuantity >= itemSum, "Insufficient voucher quantity");
+
+        uint256 totalFare = voucher.voucherValue.mul(itemSum);
+        require(balanceOf(msg.sender) >= totalFare, "Insufficient funds for redeeming voucher");
+
+        _burn(msg.sender, totalFare);
+        voucher.voucherQuantity = voucher.voucherQuantity.sub(itemSum);
+
+        emit LogMessage("Voucher redeemed successfully");
+    }
+
+    function changeVoucherQuantity(string memory voucherType, uint256 newQuantity) external onlyOwner {
+        require(bytes(voucherType).length > 0, "Voucher type cannot be empty");
+        vouchers[voucherType].voucherQuantity = newQuantity;
+        emit LogMessage("Voucher quantity changed successfully");
+    }
+}
